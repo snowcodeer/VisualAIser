@@ -36,7 +36,7 @@ export function Controls({
     sendMessage,
     socketState,
     sessionId,
-  } = useFlow();
+  } = useFlow() as any;
 
   const { startRecording, stopRecording, audioContext, isRecording } =
     usePCMAudioRecorderContext();
@@ -81,23 +81,21 @@ export function Controls({
             {
               type: "function",
               function: {
-                name: "scroll_document",
-                description: "Use this to scroll the opened document up, down, left, or right.",
+                name: "open_company_policy",
+                description: "Use this to open the company policy Google Doc document in a controllable iframe.",
                 parameters: {
                   type: "object",
                   properties: {
-                    direction: {
+                    action: {
                       type: "string",
-                      description: "The direction to scroll: 'up', 'down', 'left', 'right'",
-                      enum: ["up", "down", "left", "right"]
+                      description: "The action to perform - should be 'open' when user says 'open company policy'"
                     },
-                    amount: {
+                    document: {
                       type: "string",
-                      description: "How much to scroll: 'small', 'medium', 'large'",
-                      enum: ["small", "medium", "large"]
+                      description: "The document to open - should be 'company policy'"
                     }
                   },
-                  required: ["direction"]
+                  required: ["action"]
                 }
               }
             }
@@ -176,7 +174,7 @@ export function Controls({
   useFlowEventListener(
     "message",
     useCallback(
-      ({ data }) => {
+      ({ data }: { data: any }) => {
         console.log("📨 Flow message received:", data);
         
         // Handle ToolInvoke messages here since they come through the message event
@@ -207,78 +205,37 @@ export function Controls({
               message: "ToolResult",
               id: data.id,
               status: "ok",
-              content: "Annual report opened in controllable iframe. You can now use voice commands to scroll!"
+              content: "Annual report opened in controllable iframe."
             });
           }
           
-          if (data.function.name === "scroll_document") {
-            console.log("Scrolling document with parameters:", data.function.arguments);
+          
+          if (data.function.name === "open_company_policy") {
+            console.log("Opening company policy with parameters:", data.function.arguments);
             
-            const { direction, amount = "medium" } = data.function.arguments;
+            // Open the company policy Google Doc in iframe
+            const link = "https://docs.google.com/document/d/1GOpjra_9LRFVl8mkZVk0OqhGxr5fLChp3OFpXAEiMjA/edit?tab=t.0#heading=h.hgwnk2xqls48";
             
-            // Calculate scroll amounts
-            const scrollAmounts = {
-              small: 100,
-              medium: 300,
-              large: 600
-            };
+            // Set iframe URL and open iframe
+            setIframeUrl(link);
+            setIsIframeOpen(true);
             
-            const scrollAmount = scrollAmounts[amount as keyof typeof scrollAmounts] || 300;
+            // Add to tool call history
+            setToolCallHistory(prev => [{
+              id: data.id,
+              name: data.function.name,
+              timestamp: new Date(),
+              link: link,
+              status: 'success'
+            }, ...prev]);
             
-            // Get the iframe element
-            const iframe = document.getElementById('controllable-iframe') as HTMLIFrameElement;
-            
-            if (iframe && iframe.contentWindow) {
-              try {
-                // Try to scroll the iframe content
-                const scrollX = direction === 'left' ? -scrollAmount : direction === 'right' ? scrollAmount : 0;
-                const scrollY = direction === 'up' ? -scrollAmount : direction === 'down' ? scrollAmount : 0;
-                
-                iframe.contentWindow.scrollBy(scrollX, scrollY);
-                
-                // Add to tool call history
-                setToolCallHistory(prev => [{
-                  id: data.id,
-                  name: data.function.name,
-                  timestamp: new Date(),
-                  status: 'success'
-                }, ...prev]);
-                
-                // Send ToolResult back to the server
-                sendMessage({
-                  message: "ToolResult",
-                  id: data.id,
-                  status: "ok",
-                  content: `Scrolled ${direction} by ${amount} amount`
-                });
-              } catch (error) {
-                console.log("Could not scroll iframe content (CORS restriction):", error);
-                
-                // Fallback: scroll the iframe container itself
-                const container = iframe.parentElement;
-                if (container) {
-                  const scrollX = direction === 'left' ? -scrollAmount : direction === 'right' ? scrollAmount : 0;
-                  const scrollY = direction === 'up' ? -scrollAmount : direction === 'down' ? scrollAmount : 0;
-                  container.scrollBy(scrollX, scrollY);
-                }
-                
-                // Send ToolResult back to the server
-                sendMessage({
-                  message: "ToolResult",
-                  id: data.id,
-                  status: "ok",
-                  content: `Scrolled iframe container ${direction} by ${amount} amount`
-                });
-              }
-            } else {
-              // Send ToolResult back to the server
-              sendMessage({
-                message: "ToolResult",
-                id: data.id,
-                status: "ok",
-                content: "No document is currently open to scroll"
-              });
-            }
+            // Send ToolResult back to the server
+            sendMessage({
+              message: "ToolResult",
+              id: data.id,
+              status: "ok",
+              content: "Company policy opened in controllable iframe."
+            });
           }
         }
       },
@@ -299,7 +256,9 @@ export function Controls({
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-6xl max-h-5xl flex flex-col">
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">Annual Report - Voice Controlled</h3>
+              <h3 className="text-lg font-semibold">
+                {iframeUrl?.includes('spreadsheets') ? 'Annual Report' : 'Company Policy'} - Voice Controlled
+              </h3>
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsIframeOpen(false)}
@@ -323,12 +282,12 @@ export function Controls({
                 id="controllable-iframe"
                 src={iframeUrl}
                 className="w-full h-full border-0"
-                title="Annual Report"
+                title={iframeUrl?.includes('spreadsheets') ? 'Annual Report' : 'Company Policy'}
                 sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
               />
             </div>
             <div className="p-2 bg-gray-50 border-t text-xs text-gray-600">
-              💡 Voice Commands: "scroll up", "scroll down", "scroll left", "scroll right"
+              💡 Document opened in controllable iframe
             </div>
           </div>
         </div>

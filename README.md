@@ -7,6 +7,7 @@ A Next.js application that demonstrates Speechmatics Flow voice AI with tool cal
 - **Voice AI Integration**: Real-time voice interaction with Speechmatics Flow
 - **Tool Calling**: AI agents can execute specific functions based on voice commands
 - **Annual Report Access**: Say "open annual report" to automatically open a Google Sheets document
+- **Company Policy Access**: Say "open company policy" to automatically open the company policy document
 - **Secure Implementation**: No CSP violations, secure link handling
 - **Modern UI**: Clean, responsive interface with real-time transcript display
 
@@ -40,7 +41,7 @@ CUSTOM_TEMPLATE_NAME=Your Template Name
 
 1. **Start a Conversation**: Click the "Start" button and select a persona
 2. **Voice Commands**: Speak naturally to interact with the AI agent
-3. **Tool Calling**: Say "open annual report" to automatically open the Google Sheets document
+3. **Tool Calling**: Say "open annual report" or "open company policy" to automatically open documents
 4. **View Transcript**: See the conversation history in real-time
 
 ## Tool Calling Implementation
