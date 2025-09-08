@@ -12,6 +12,7 @@ import { usePCMAudioPlayerContext } from "@speechmatics/web-pcm-player-react";
 import { type FormEventHandler, useCallback, useState } from "react";
 import { getJWT } from "@/app/actions";
 import { MicrophoneSelect } from "@/components/MicrophoneSelect";
+import { highlightTextOnScreen, readScreenText } from "./OCRUtils";
 
 export function Controls({
   personas,
@@ -209,6 +210,67 @@ export function Controls({
               content: "Company policy opened in controllable iframe."
             });
           }
+          
+          if (data.function.name === "highlight_text") {
+            console.log("Highlighting text:", data.function.arguments);
+            
+            const textToHighlight = data.function.arguments.text;
+            const color = data.function.arguments.color || 'yellow';
+            
+            const iframe = document.getElementById('controllable-iframe');
+            if (iframe && isIframeOpen) {
+              // Get the iframe's parent container for highlighting
+              const iframeContainer = iframe.parentElement;
+              if (iframeContainer) {
+                highlightTextOnScreen(textToHighlight, color, iframeContainer);
+              }
+            }
+            
+            // Send ToolResult back to the server
+            sendMessage({
+              message: "ToolResult",
+              id: data.id,
+              status: "ok",
+              content: `Highlighted "${textToHighlight}" on screen.`
+            });
+          }
+          
+          if (data.function.name === "read_screen") {
+            console.log("Reading screen text");
+            
+            const iframe = document.getElementById('controllable-iframe');
+            if (iframe && isIframeOpen) {
+              const iframeContainer = iframe.parentElement;
+              if (iframeContainer) {
+                readScreenText(iframeContainer).then(screenText => {
+                  console.log("Screen text:", screenText);
+                  
+                  // Send ToolResult back to the server
+                  sendMessage({
+                    message: "ToolResult",
+                    id: data.id,
+                    status: "ok",
+                    content: `Screen text: ${screenText.substring(0, 500)}${screenText.length > 500 ? '...' : ''}`
+                  });
+                }).catch(error => {
+                  console.error("Error reading screen:", error);
+                  sendMessage({
+                    message: "ToolResult",
+                    id: data.id,
+                    status: "error",
+                    content: "Failed to read screen text."
+                  });
+                });
+              }
+            } else {
+              sendMessage({
+                message: "ToolResult",
+                id: data.id,
+                status: "error",
+                content: "No document is currently open."
+              });
+            }
+          }
         }
       },
       [sendMessage]
@@ -232,6 +294,18 @@ export function Controls({
                 {iframeUrl?.includes('spreadsheets') ? 'Annual Report' : 'Company Policy'} - Voice Controlled
               </h3>
               <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const iframe = document.getElementById('controllable-iframe');
+                    if (iframe && iframe.parentElement) {
+                      const highlights = iframe.parentElement.querySelectorAll('.ocr-highlight');
+                      highlights.forEach(highlight => highlight.remove());
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm"
+                >
+                  Clear Highlights
+                </button>
                 <button
                   onClick={() => setIsIframeOpen(false)}
                   className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"

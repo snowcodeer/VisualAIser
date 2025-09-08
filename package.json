@@ -19,11 +19,13 @@
     "@speechmatics/use-flow-transcript": "^0.0.1-rc.0",
     "@speechmatics/web-pcm-player-react": "^2.0.0",
     "@tailwindcss/postcss": "^4.1.10",
+    "html2canvas": "^1.4.1",
     "next": "15.3.4",
     "postcss": "^8.5.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.1.10"
+    "tailwindcss": "^4.1.10",
+    "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",
