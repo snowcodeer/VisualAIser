@@ -54,64 +54,36 @@ export function Controls({
       const conversationConfig = {
         template_id: personaId,
         template_variables: {
-          // Tools are configured in the Speechmatics website, not here
-        },
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "open_annual_report",
-                description: "Use this to open the annual report Google Sheets document in a controllable iframe.",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    action: {
-                      type: "string",
-                      description: "The action to perform - should be 'open' when user says 'open annual report'"
-                    },
-                    document: {
-                      type: "string",
-                      description: "The document to open - should be 'annual report'"
-                    }
-                  },
-                  required: ["action"]
-                }
-              }
-            },
-            {
-              type: "function",
-              function: {
-                name: "open_company_policy",
-                description: "Use this to open the company policy Google Doc document in a controllable iframe.",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    action: {
-                      type: "string",
-                      description: "The action to perform - should be 'open' when user says 'open company policy'"
-                    },
-                    document: {
-                      type: "string",
-                      description: "The document to open - should be 'company policy'"
-                    }
-                  },
-                  required: ["action"]
-                }
-              }
-            }
-          ]
+        }
       };
 
       console.log("🚀 Starting conversation with config:", conversationConfig);
+      console.log("🔧 Tools will be configured on Speechmatics dashboard");
 
-      await startConversation(jwt, {
+      console.log("🔧 About to start conversation with:", {
+        jwt: jwt.substring(0, 20) + "...",
         config: conversationConfig,
         audioFormat: {
           type: "raw",
           encoding: "pcm_f32le",
           sample_rate: recordingSampleRate,
-        },
+        }
       });
+
+      try {
+        await startConversation(jwt, {
+          config: conversationConfig,
+          audioFormat: {
+            type: "raw",
+            encoding: "pcm_f32le",
+            sample_rate: recordingSampleRate,
+          },
+        });
+        console.log("✅ Conversation started successfully");
+      } catch (error) {
+        console.error("❌ Failed to start conversation:", error);
+        throw error;
+      }
     },
     [startConversation],
   );

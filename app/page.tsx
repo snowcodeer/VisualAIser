@@ -1,5 +1,4 @@
 // highlight-start
-import { fetchPersonas } from "@speechmatics/flow-client-react";
 import { Controls } from "@/components/Controls";
 import { TranscriptView } from "@/components/TranscriptView";
 // highlight-end
@@ -7,14 +6,11 @@ import { Providers } from "./providers";
 
 export default async function Home() {
   // highlight-start
-  const fetchedPersonas = await fetchPersonas();
-  
-  // Add custom template ID from environment variables
+  // Use only the Sam persona
   const customTemplateId = process.env.CUSTOM_TEMPLATE_ID;
-  const customTemplateName = process.env.CUSTOM_TEMPLATE_NAME || "My Custom Template";
+  const customTemplateName = process.env.CUSTOM_TEMPLATE_NAME || "Sam";
   
   const personas = {
-    ...fetchedPersonas,
     ...(customTemplateId && { [customTemplateId]: { name: customTemplateName } })
   };
   // highlight-end
