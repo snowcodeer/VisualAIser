@@ -26,6 +26,7 @@ export function Controls({
     status: 'success' | 'error';
   }>>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isDebugPanelOpen, setIsDebugPanelOpen] = useState(false);
   const {
     startConversation,
     endConversation,
@@ -35,7 +36,7 @@ export function Controls({
     sessionId,
   } = useFlow();
 
-  const { startRecording, stopRecording, audioContext } =
+  const { startRecording, stopRecording, audioContext, isRecording } =
     usePCMAudioRecorderContext();
 
   const startSession = useCallback(
@@ -206,87 +207,141 @@ export function Controls({
   const disableSelects = !!sessionId;
 
   return (
-    <section>
-      <h3>Controls</h3>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <div className="grid grid-cols-2 gap-4">
-          <MicrophoneSelect disabled={disableSelects} />
-          <select name="personaId" disabled={disableSelects}>
-            {Object.entries(personas).map(([id, persona]) => (
-              <option key={id} value={id} label={persona.name} />
-            ))}
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <ActionButton />
-          <MuteMicrophoneButton />
-        </div>
-      </form>
-      
-      {/* Tool Call History Dropdown */}
-      {toolCallHistory.length > 0 && (
-        <div className="mt-4 relative">
-          <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-md text-left hover:bg-gray-100 transition-colors"
-          >
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-gray-800">
-                Tool Call History ({toolCallHistory.length})
-              </span>
-              <svg
-                className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </button>
+    <div className="fixed top-4 right-4 z-50">
+      {/* Debug Panel Toggle Button */}
+      <button
+        onClick={() => setIsDebugPanelOpen(!isDebugPanelOpen)}
+        className="mb-2 p-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 transition-colors shadow-lg"
+        title="Toggle Debug Panel"
+      >
+        <svg
+          className={`w-5 h-5 transition-transform ${isDebugPanelOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Debug Panel */}
+      {isDebugPanelOpen && (
+        <div className="bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-80 max-h-96 overflow-y-auto">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Debug Panel</h3>
           
-          {isDropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
-              {toolCallHistory.map((toolCall, index) => (
-                <div key={toolCall.id} className="p-3 border-b border-gray-100 last:border-b-0">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-800 capitalize">
-                        {toolCall.name.replace(/_/g, ' ')}
-                      </h4>
-                      <p className="text-xs text-gray-500">
-                        {toolCall.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      toolCall.status === 'success' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {toolCall.status}
+          {/* Controls Section */}
+          <div className="mb-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Voice Controls</h4>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+              <div className="grid grid-cols-1 gap-2">
+                <MicrophoneSelect disabled={disableSelects} />
+                <select name="personaId" disabled={disableSelects} className="p-2 border border-gray-300 rounded text-sm">
+                  {Object.entries(personas).map(([id, persona]) => (
+                    <option key={id} value={id} label={persona.name} />
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <ActionButton />
+                <MuteMicrophoneButton />
+              </div>
+            </form>
+          </div>
+          
+          {/* Tool Call History Section */}
+          {toolCallHistory.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Tool Call History</h4>
+              <div className="relative">
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded text-left hover:bg-gray-100 transition-colors text-sm"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-800">
+                      History ({toolCallHistory.length})
                     </span>
+                    <svg
+                      className={`w-3 h-3 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
                   </div>
-                  
-                  {toolCall.link && (
-                    <div className="mt-2">
-                      <a
-                        href={toolCall.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 underline text-sm break-all"
-                        onClick={() => window.open(toolCall.link, '_blank')}
-                      >
-                        {toolCall.link}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              ))}
+                </button>
+                
+                {isDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg z-10 max-h-40 overflow-y-auto">
+                    {toolCallHistory.map((toolCall, index) => (
+                      <div key={toolCall.id} className="p-2 border-b border-gray-100 last:border-b-0">
+                        <div className="flex justify-between items-start mb-1">
+                          <div>
+                            <h5 className="text-xs font-medium text-gray-800 capitalize">
+                              {toolCall.name.replace(/_/g, ' ')}
+                            </h5>
+                            <p className="text-xs text-gray-500">
+                              {toolCall.timestamp.toLocaleTimeString()}
+                            </p>
+                          </div>
+                          <span className={`px-1 py-0.5 text-xs rounded ${
+                            toolCall.status === 'success' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {toolCall.status}
+                          </span>
+                        </div>
+                        
+                        {toolCall.link && (
+                          <div className="mt-1">
+                            <a
+                              href={toolCall.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 underline text-xs break-all"
+                              onClick={() => window.open(toolCall.link, '_blank')}
+                            >
+                              {toolCall.link.length > 50 ? `${toolCall.link.substring(0, 50)}...` : toolCall.link}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
+
+          {/* Status Section */}
+          <div className="mb-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Status</h4>
+            <div className="text-xs text-gray-600 space-y-1">
+              <div className="flex justify-between">
+                <span>🔌 Socket:</span>
+                <span className={socketState === 'open' ? 'text-green-600' : 'text-red-600'}>
+                  {socketState ?? "(uninitialized)"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>💬 Session:</span>
+                <span className={sessionId ? 'text-green-600' : 'text-gray-500'}>
+                  {sessionId ? "Active" : "Inactive"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>🎤 Microphone:</span>
+                <span className={isRecording ? 'text-green-600' : 'text-gray-500'}>
+                  {isRecording ? "Recording" : "Not Recording"}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
