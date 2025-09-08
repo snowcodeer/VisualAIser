@@ -9,7 +9,7 @@ import {
   useFlowEventListener,
 } from "@speechmatics/flow-client-react";
 import { usePCMAudioPlayerContext } from "@speechmatics/web-pcm-player-react";
-import { type FormEventHandler, useCallback } from "react";
+import { type FormEventHandler, useCallback, useState } from "react";
 import { getJWT } from "@/app/actions";
 import { MicrophoneSelect } from "@/components/MicrophoneSelect";
 
@@ -18,10 +18,19 @@ export function Controls({
 }: {
   personas: Record<string, { name: string }>;
 }) {
+  const [toolCallHistory, setToolCallHistory] = useState<Array<{
+    id: string;
+    name: string;
+    timestamp: Date;
+    link?: string;
+    status: 'success' | 'error';
+  }>>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const {
     startConversation,
     endConversation,
     sendAudio,
+    sendMessage,
     socketState,
     sessionId,
   } = useFlow();
@@ -39,13 +48,40 @@ export function Controls({
     }) => {
       const jwt = await getJWT("flow");
 
-      await startConversation(jwt, {
-        config: {
-          template_id: personaId,
-          template_variables: {
-            // We can set up any template variables here
-          },
+      const conversationConfig = {
+        template_id: personaId,
+        template_variables: {
+          // Tools are configured in the Speechmatics website, not here
         },
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "open_annual_report",
+              description: "Use this to open the annual report Google Sheets document. Return the link in your response so the user can click on it.",
+              parameters: {
+                type: "object",
+                properties: {
+                  action: {
+                    type: "string",
+                    description: "The action to perform - should be 'open' when user says 'open annual report'"
+                  },
+                  document: {
+                    type: "string",
+                    description: "The document to open - should be 'annual report'"
+                  }
+                },
+                required: ["action"]
+              }
+            }
+          }
+        ]
+      };
+
+      console.log("🚀 Starting conversation with config:", conversationConfig);
+
+      await startConversation(jwt, {
+        config: conversationConfig,
         audioFormat: {
           type: "raw",
           encoding: "pcm_f32le",
@@ -110,6 +146,62 @@ export function Controls({
     ),
   );
 
+  // Debug: Listen for all flow events to see what's happening
+  useFlowEventListener(
+    "message",
+    useCallback(
+      ({ data }) => {
+        console.log("📨 Flow message received:", data);
+        
+        // Handle ToolInvoke messages here since they come through the message event
+        if (data.message === "ToolInvoke") {
+          console.log("🔧 ToolInvoke received via message event:", data);
+          
+          if (data.function.name === "open_annual_report") {
+            console.log("Opening annual report with parameters:", data.function.arguments);
+            
+            // Open the Google Sheets document in a new tab
+            const link = "https://docs.google.com/spreadsheets/d/1dyl-WTWUXjN3kp5QhvuNOaH6Xyqc38xh5ZIb9cfHNIY/edit?gid=0#gid=0";
+            
+            // Open the link in a new tab
+            console.log("Annual report link ready:", link);
+            window.open(link, '_blank');
+            
+            // Add to tool call history
+            setToolCallHistory(prev => [{
+              id: data.id,
+              name: data.function.name,
+              timestamp: new Date(),
+              link: link,
+              status: 'success'
+            }, ...prev]);
+            
+            // Also copy to clipboard as a bonus
+            if (navigator.clipboard && window.isSecureContext) {
+              navigator.clipboard.writeText(link).then(() => {
+                console.log("Link copied to clipboard");
+              }).catch(() => {
+                console.log("Could not copy to clipboard");
+              });
+            }
+            
+            // Send ToolResult back to the server
+            sendMessage({
+              message: "ToolResult",
+              id: data.id,
+              status: "ok",
+              content: "Annual report link is now displayed below. Click to open!"
+            });
+          }
+        }
+      },
+      [sendMessage]
+    ),
+  );
+
+
+
+
   // Disable selects when session is active.
   const disableSelects = !!sessionId;
 
@@ -130,6 +222,70 @@ export function Controls({
           <MuteMicrophoneButton />
         </div>
       </form>
+      
+      {/* Tool Call History Dropdown */}
+      {toolCallHistory.length > 0 && (
+        <div className="mt-4 relative">
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-md text-left hover:bg-gray-100 transition-colors"
+          >
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-gray-800">
+                Tool Call History ({toolCallHistory.length})
+              </span>
+              <svg
+                className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </button>
+          
+          {isDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+              {toolCallHistory.map((toolCall, index) => (
+                <div key={toolCall.id} className="p-3 border-b border-gray-100 last:border-b-0">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-800 capitalize">
+                        {toolCall.name.replace(/_/g, ' ')}
+                      </h4>
+                      <p className="text-xs text-gray-500">
+                        {toolCall.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      toolCall.status === 'success' 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {toolCall.status}
+                    </span>
+                  </div>
+                  
+                  {toolCall.link && (
+                    <div className="mt-2">
+                      <a
+                        href={toolCall.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline text-sm break-all"
+                        onClick={() => window.open(toolCall.link, '_blank')}
+                      >
+                        {toolCall.link}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

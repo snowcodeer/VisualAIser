@@ -12,7 +12,10 @@ export function TranscriptView() {
 
   useFlowEventListener("message", ({ data }) => {
     if (data.message === "Error") {
-      throw new Error("Error message from server", { cause: data.error });
+      console.error("Server error details:", data);
+      console.error("Error cause:", data.error);
+      // Instead of throwing, let's log the error and show it in the UI
+      alert(`Server Error: ${data.error?.message || data.error || 'Unknown error'}`);
     }
   });
 
