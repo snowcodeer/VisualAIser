@@ -27,6 +27,8 @@ export function Controls({
   }>>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isDebugPanelOpen, setIsDebugPanelOpen] = useState(false);
+  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [isIframeOpen, setIsIframeOpen] = useState(false);
   const {
     startConversation,
     endConversation,
@@ -54,29 +56,52 @@ export function Controls({
         template_variables: {
           // Tools are configured in the Speechmatics website, not here
         },
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "open_annual_report",
-              description: "Use this to open the annual report Google Sheets document. Return the link in your response so the user can click on it.",
-              parameters: {
-                type: "object",
-                properties: {
-                  action: {
-                    type: "string",
-                    description: "The action to perform - should be 'open' when user says 'open annual report'"
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "open_annual_report",
+                description: "Use this to open the annual report Google Sheets document in a controllable iframe.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    action: {
+                      type: "string",
+                      description: "The action to perform - should be 'open' when user says 'open annual report'"
+                    },
+                    document: {
+                      type: "string",
+                      description: "The document to open - should be 'annual report'"
+                    }
                   },
-                  document: {
-                    type: "string",
-                    description: "The document to open - should be 'annual report'"
-                  }
-                },
-                required: ["action"]
+                  required: ["action"]
+                }
+              }
+            },
+            {
+              type: "function",
+              function: {
+                name: "scroll_document",
+                description: "Use this to scroll the opened document up, down, left, or right.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    direction: {
+                      type: "string",
+                      description: "The direction to scroll: 'up', 'down', 'left', 'right'",
+                      enum: ["up", "down", "left", "right"]
+                    },
+                    amount: {
+                      type: "string",
+                      description: "How much to scroll: 'small', 'medium', 'large'",
+                      enum: ["small", "medium", "large"]
+                    }
+                  },
+                  required: ["direction"]
+                }
               }
             }
-          }
-        ]
+          ]
       };
 
       console.log("🚀 Starting conversation with config:", conversationConfig);
@@ -161,12 +186,12 @@ export function Controls({
           if (data.function.name === "open_annual_report") {
             console.log("Opening annual report with parameters:", data.function.arguments);
             
-            // Open the Google Sheets document in a new tab
+            // Open the Google Sheets document in iframe
             const link = "https://docs.google.com/spreadsheets/d/1dyl-WTWUXjN3kp5QhvuNOaH6Xyqc38xh5ZIb9cfHNIY/edit?gid=0#gid=0";
             
-            // Open the link in a new tab
-            console.log("Annual report link ready:", link);
-            window.open(link, '_blank');
+            // Set iframe URL and open iframe
+            setIframeUrl(link);
+            setIsIframeOpen(true);
             
             // Add to tool call history
             setToolCallHistory(prev => [{
@@ -177,22 +202,83 @@ export function Controls({
               status: 'success'
             }, ...prev]);
             
-            // Also copy to clipboard as a bonus
-            if (navigator.clipboard && window.isSecureContext) {
-              navigator.clipboard.writeText(link).then(() => {
-                console.log("Link copied to clipboard");
-              }).catch(() => {
-                console.log("Could not copy to clipboard");
-              });
-            }
-            
             // Send ToolResult back to the server
             sendMessage({
               message: "ToolResult",
               id: data.id,
               status: "ok",
-              content: "Annual report link is now displayed below. Click to open!"
+              content: "Annual report opened in controllable iframe. You can now use voice commands to scroll!"
             });
+          }
+          
+          if (data.function.name === "scroll_document") {
+            console.log("Scrolling document with parameters:", data.function.arguments);
+            
+            const { direction, amount = "medium" } = data.function.arguments;
+            
+            // Calculate scroll amounts
+            const scrollAmounts = {
+              small: 100,
+              medium: 300,
+              large: 600
+            };
+            
+            const scrollAmount = scrollAmounts[amount as keyof typeof scrollAmounts] || 300;
+            
+            // Get the iframe element
+            const iframe = document.getElementById('controllable-iframe') as HTMLIFrameElement;
+            
+            if (iframe && iframe.contentWindow) {
+              try {
+                // Try to scroll the iframe content
+                const scrollX = direction === 'left' ? -scrollAmount : direction === 'right' ? scrollAmount : 0;
+                const scrollY = direction === 'up' ? -scrollAmount : direction === 'down' ? scrollAmount : 0;
+                
+                iframe.contentWindow.scrollBy(scrollX, scrollY);
+                
+                // Add to tool call history
+                setToolCallHistory(prev => [{
+                  id: data.id,
+                  name: data.function.name,
+                  timestamp: new Date(),
+                  status: 'success'
+                }, ...prev]);
+                
+                // Send ToolResult back to the server
+                sendMessage({
+                  message: "ToolResult",
+                  id: data.id,
+                  status: "ok",
+                  content: `Scrolled ${direction} by ${amount} amount`
+                });
+              } catch (error) {
+                console.log("Could not scroll iframe content (CORS restriction):", error);
+                
+                // Fallback: scroll the iframe container itself
+                const container = iframe.parentElement;
+                if (container) {
+                  const scrollX = direction === 'left' ? -scrollAmount : direction === 'right' ? scrollAmount : 0;
+                  const scrollY = direction === 'up' ? -scrollAmount : direction === 'down' ? scrollAmount : 0;
+                  container.scrollBy(scrollX, scrollY);
+                }
+                
+                // Send ToolResult back to the server
+                sendMessage({
+                  message: "ToolResult",
+                  id: data.id,
+                  status: "ok",
+                  content: `Scrolled iframe container ${direction} by ${amount} amount`
+                });
+              }
+            } else {
+              // Send ToolResult back to the server
+              sendMessage({
+                message: "ToolResult",
+                id: data.id,
+                status: "ok",
+                content: "No document is currently open to scroll"
+              });
+            }
           }
         }
       },
@@ -207,7 +293,49 @@ export function Controls({
   const disableSelects = !!sessionId;
 
   return (
-    <div className="fixed top-4 right-4 z-50">
+    <>
+      {/* Controllable Iframe */}
+      {isIframeOpen && iframeUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full h-full max-w-6xl max-h-5xl flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-semibold">Annual Report - Voice Controlled</h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsIframeOpen(false)}
+                  className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                >
+                  Minimize
+                </button>
+                <button
+                  onClick={() => {
+                    setIsIframeOpen(false);
+                    setIframeUrl(null);
+                  }}
+                  className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <iframe
+                id="controllable-iframe"
+                src={iframeUrl}
+                className="w-full h-full border-0"
+                title="Annual Report"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+              />
+            </div>
+            <div className="p-2 bg-gray-50 border-t text-xs text-gray-600">
+              💡 Voice Commands: "scroll up", "scroll down", "scroll left", "scroll right"
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Debug Panel */}
+      <div className="fixed top-4 right-4 z-50">
       {/* Debug Panel Toggle Button */}
       <button
         onClick={() => setIsDebugPanelOpen(!isDebugPanelOpen)}
@@ -243,7 +371,7 @@ export function Controls({
               </div>
               <div className="flex gap-2">
                 <ActionButton />
-                <MuteMicrophoneButton />
+                <MuteMicrophoneButton isRecording={isRecording} />
               </div>
             </form>
           </div>
@@ -341,7 +469,8 @@ export function Controls({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -370,8 +499,8 @@ function ActionButton() {
   );
 }
 
-function MuteMicrophoneButton() {
-  const { isRecording, mute, unmute, isMuted } = usePCMAudioRecorderContext();
+function MuteMicrophoneButton({ isRecording }: { isRecording: boolean }) {
+  const { mute, unmute, isMuted } = usePCMAudioRecorderContext();
   if (!isRecording) return null;
 
   return (
